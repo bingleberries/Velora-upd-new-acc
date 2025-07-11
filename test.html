@@ -21,8 +21,8 @@
       color: var(--text);
       background: linear-gradient(135deg, var(--bg-start), var(--bg-end));
       overflow: hidden;
-      position: relative;
       min-height: 100vh;
+      position: relative;
     }
     #tsparticles {
       position: fixed; top: 0; left: 0;
@@ -71,53 +71,54 @@
       font-family: 'Inter', monospace;
       font-weight: 900;
       letter-spacing: 0.14em;
-      border-right: 0.1em solid #fff;
+      border-right: 0.1em solid rgba(255,255,255,0.9);
       white-space: nowrap;
       overflow: hidden;
       display: inline-block;
       text-shadow: 0 0 20px #00ffea, 0 0 40px #3333ff;
       min-height: 1.2em;
     }
+    /* Modern larger button */
     .get-started-btn {
       position: relative;
       display: inline-block;
       margin-top: 48px;
-      padding: 12px 32px;
-      font-size: 1em;
-      font-weight: 700;
+      padding: 18px 48px;
+      font-size: 1.2em;
+      font-weight: 800;
+      letter-spacing: 0.1em;
       color: #fff;
-      background: var(--accent);
+      background: linear-gradient(135deg, #4a90e2, #00ffea);
       border: none;
-      border-radius: 12px;
+      border-radius: 24px;
       cursor: pointer;
       overflow: hidden;
-      transition: transform 0.2s, background 0.2s;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      box-shadow: 0 4px 30px rgba(0,0,0,0.5);
       text-decoration: none;
-      box-shadow: 0 2px 18px #0004;
     }
     .get-started-btn:hover {
-      transform: translateY(-2px) scale(1.02);
-      background: #6cb3f0;
+      transform: translateY(-3px) scale(1.05);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
     }
-    .get-started-btn::after {
+    .get-started-btn::before {
       content: '';
       position: absolute;
-      top: 0; left: -100%;
-      width: 100%; height: 100%;
-      background: rgba(255,255,255,0.3);
-      transform: skewX(-20deg);
-      transition: all 0.5s;
+      top: -50%; left: -50%;
+      width: 200%; height: 200%;
+      background: radial-gradient(circle at center, rgba(255,255,255,0.4), transparent 70%);
+      opacity: 0;
+      transition: opacity 0.5s ease;
     }
-    .get-started-btn:hover::after {
-      left: 200%;
-      transition: all 0.5s;
+    .get-started-btn:hover::before {
+      opacity: 1;
     }
     @media (max-width: 550px) {
       .topbar img { height: 42px; margin-left: 16px; }
       .center-content { padding-top: calc(var(--topbar-height) + 20px); }
       .rainbow-text { font-size: 2em; }
       .typewriter { font-size: 1.8em; }
-      .get-started-btn { padding: 10px 24px; font-size: 0.9em; margin-top: 32px; }
+      .get-started-btn { padding: 14px 36px; font-size: 1em; margin-top: 32px; }
     }
   </style>
 </head>
