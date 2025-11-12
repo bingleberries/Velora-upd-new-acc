@@ -350,6 +350,60 @@ if ('serviceWorker' in navigator) {
     .game-item.hidden {
       display: none !important;
     }
+
+    /* Mobile-detection modal styles */
+    .hidden { display: none !important; }
+    .mobile-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 20px;
+    }
+    .mobile-modal {
+      width: 100%;
+      max-width: 420px;
+      background: linear-gradient(180deg, rgba(30,30,45,0.98), rgba(20,20,30,0.98));
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+      text-align: center;
+      color: var(--text-color);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .mobile-modal h2 {
+      font-size: 20px;
+      margin-bottom: 10px;
+      letter-spacing: 0.2px;
+    }
+    .mobile-modal p {
+      font-size: 14px;
+      margin-bottom: 18px;
+      color: #d9d9d9;
+    }
+    .mobile-modal .modal-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+    .mobile-modal button {
+      padding: 10px 16px;
+      font-weight: 700;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      background: var(--accent-color);
+      color: #fff;
+      transition: transform var(--transition-speed), box-shadow var(--transition-speed);
+    }
+    .mobile-modal button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 10px var(--accent-glow);
+    }
+
     @media (max-width: 768px) {
       .sidebar {
         width: 60px;
@@ -655,6 +709,18 @@ if ('serviceWorker' in navigator) {
       </div><div class="game-item" data-title="The Binding of Isaac" data-game="games/cltboilambeternal.html" data-icon="images/icons/IMG_0806.jpeg"><div class="heart">♡</div><img src="images/icons/IMG_0806.jpeg" alt="binding of isaac horror" onclick="openFullscreenGame('games/cltboilambeternal.html')">
     </div>
   </div>
+
+  <!-- Mobile-detection modal -->
+  <div id="mobileModal" class="mobile-modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="mobileModalTitle" aria-describedby="mobileModalDesc">
+    <div class="mobile-modal" role="document">
+      <h2 id="mobileModalTitle">Mobile device detected</h2>
+      <p id="mobileModalDesc">Note: Velora is not 100% supported on mobile devices. Click OK to continue.</p>
+      <div class="modal-actions">
+        <button id="mobileModalOk">OK</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     tsParticles.load("tsparticles", {
       fpsLimit: 60,
@@ -768,6 +834,66 @@ if ('serviceWorker' in navigator) {
     function openFullscreenGame(path) {
       window.location.href = `iframe.html?game=${encodeURIComponent(path)}`;
     }
+
+    // ----- Mobile detection & modal behavior -----
+    function isMobileDevice() {
+      // checks userAgent and touch capability for broader detection
+      const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+      const isUA = /Mobi|Android|iPhone|iPad|iPod|Opera Mini|IEMobile|BlackBerry/i.test(ua);
+      const hasTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0 || navigator.msMaxTouchPoints > 0;
+      return isUA || hasTouch;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      try {
+        const modalOverlay = document.getElementById('mobileModal');
+        const okBtn = document.getElementById('mobileModalOk');
+
+        // If mobile is detected and the user hasn't already accepted in this browser session,
+        // show the modal. (We use sessionStorage so it reappears in a new session.)
+        const acceptedFlag = sessionStorage.getItem('veloraMobileAccepted');
+
+        if (isMobileDevice() && !acceptedFlag) {
+          // show modal
+          modalOverlay.classList.remove('hidden');
+          // prevent background scroll while modal visible
+          document.documentElement.style.overflow = 'hidden';
+          document.body.style.overflow = 'hidden';
+          // focus OK button for accessibility
+          okBtn.focus();
+
+          okBtn.addEventListener('click', () => {
+            modalOverlay.classList.add('hidden');
+            document.documentElement.style.overflow = '';
+            document.body.style.overflow = '';
+            // remember acceptance for this session only
+            sessionStorage.setItem('veloraMobileAccepted', '1');
+          });
+
+          // allow escape key to close modal (optional)
+          const escHandler = (e) => {
+            if (e.key === 'Escape') {
+              if (!modalOverlay.classList.contains('hidden')) {
+                modalOverlay.classList.add('hidden');
+                document.documentElement.style.overflow = '';
+                document.body.style.overflow = '';
+                sessionStorage.setItem('veloraMobileAccepted', '1');
+              }
+            }
+          };
+          document.addEventListener('keydown', escHandler, { once: false });
+
+          // prevent clicks from propagating to background
+          modalOverlay.addEventListener('click', (e) => {
+            // only close when clicking the overlay itself? we prefer blocking accidental clicks,
+            // so do not close when clicking outside — require OK button.
+            e.stopPropagation();
+          }, { passive: true });
+        }
+      } catch (err) {
+        console.warn('Mobile modal failed to initialize', err);
+      }
+    });
   </script>
 </body>
 </html>
