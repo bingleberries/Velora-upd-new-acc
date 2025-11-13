@@ -39,179 +39,85 @@
     <button id="close-ad" aria-label="Close Ad">Close</button>
   </div>
 
-  <script>
-    // --- Unity loader & part merging (unchanged logic but with timeouts and safe fallbacks) ---
-    const buildUrl = "https://cdn.jsdelivr.net/gh/bubbls/99itf@main/Build";
-    const loaderUrl = buildUrl + "/Build.loader.js";
-    const cdnBaseUrl = "https://cdn.jsdelivr.net/gh/bubbls/99itf@main/";
+ <script>
+(function () {
+  const showDelayAfterUnity = 3000; // wait 3s after Unity fully loads
+  const countdownStart = 12; // 12s countdown before close
+  const reappearDelay = 25000; // 25s before reappearing
+  const adContainer = document.getElementById('ad-container');
+  const closeBtn = document.getElementById('close-ad');
 
-    const dataParts = [
-      cdnBaseUrl + "Build.data.br.part0",
-      cdnBaseUrl + "Build.data.br.part1",
-      cdnBaseUrl + "Build.data.br.part2",
-      cdnBaseUrl + "Build.data.br.part3",
-    ];
-    const wasmParts = [
-      cdnBaseUrl + "Build.wasm.br.part0",
-      cdnBaseUrl + "Build.wasm.br.part1",
-      cdnBaseUrl + "Build.wasm.br.part2",
-      cdnBaseUrl + "Build.wasm.br.part3",
-      cdnBaseUrl + "Build.wasm.br.part4",
-    ];
+  let unityLoaded = false;
+  let adInitialized = false;
 
-    async function fetchAndCombineParts(partUrls, timeoutMs = 20000) {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), timeoutMs);
-      try {
-        const buffers = [];
-        for (const url of partUrls) {
-          const response = await fetch(url, { signal: controller.signal });
-          if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
-          buffers.push(await response.arrayBuffer());
-        }
-        const totalLength = buffers.reduce((s, b) => s + b.byteLength, 0);
-        const combined = new Uint8Array(totalLength);
-        let offset = 0;
-        for (const buffer of buffers) {
-          combined.set(new Uint8Array(buffer), offset);
-          offset += buffer.byteLength;
-        }
-        return new Blob([combined], { type: 'application/octet-stream' });
-      } finally {
-        clearTimeout(id);
+  // Detect when Unity finishes loading
+  function waitForUnity() {
+    const check = setInterval(() => {
+      if (window.myGameInstance && window.myGameInstance.Module && !window.myGameInstance.Module.isLoading) {
+        clearInterval(check);
+        unityLoaded = true;
+        console.log('✅ Unity finished loading — ads may start soon');
+        setTimeout(startAdCycle, showDelayAfterUnity);
       }
-    }
-
-    const config = {
-      dataUrl: "",
-      frameworkUrl: buildUrl + "/Build.framework.js",
-      codeUrl: "",
-      streamingAssetsUrl: "StreamingAssets",
-      companyName: "DefaultCompany",
-      productName: "99Days",
-      productVersion: "0.1"
-    };
-
-    const canvas = document.querySelector("#unity-canvas");
-    const loadingCover = document.querySelector("#loading-cover");
-    const progressBarEmpty = document.querySelector("#unity-progress-bar-empty");
-    const progressBarFull = document.querySelector("#unity-progress-bar-full");
-    const spinner = document.querySelector('.spinner');
-
-    document.addEventListener('contextmenu', e => e.preventDefault());
-    function FocusGame(){ window.focus(); canvas.focus(); }
-    window.addEventListener('pointerdown', FocusGame);
-    window.addEventListener('touchstart', FocusGame);
-
-    (async function init() {
-      try {
-        loadingCover.style.display = "";
-        spinner.style.display = "";
-        const s = document.createElement("script");
-        s.src = loaderUrl;
-        s.async = true;
-        s.onload = async () => {
-          try {
-            const dataBlob = await fetchAndCombineParts(dataParts, 30000);
-            const wasmBlob = await fetchAndCombineParts(wasmParts, 30000);
-            config.dataUrl = URL.createObjectURL(dataBlob);
-            config.codeUrl = URL.createObjectURL(wasmBlob);
-          } catch (err) {
-            console.warn("Combine parts failed or timed out - continuing with loader defaults.", err);
-          }
-
-          if (typeof createUnityInstance === "function") {
-            createUnityInstance(canvas, config, (progress) => {
-              spinner.style.display = "none";
-              progressBarEmpty.style.display = "";
-              progressBarFull.style.width = `${100 * progress}%`;
-            }).then((unityInstance) => {
-              loadingCover.style.display = "none";
-            }).catch((message) => {
-              console.error("Unity load error:", message);
-            });
-          } else {
-            console.error("createUnityInstance not found in loader.");
-            loadingCover.style.display = "none";
-          }
-        };
-        s.onerror = (e) => { console.error("Failed to load loader script", e); loadingCover.style.display = "none"; };
-        document.body.appendChild(s);
-      } catch (e) {
-        console.error("Init error:", e);
-        loadingCover.style.display = "none";
+    }, 1000);
+    // fallback after 15s even if detection fails
+    setTimeout(() => {
+      if (!unityLoaded) {
+        console.warn('⚠️ Unity load detection timeout — starting ads anyway.');
+        clearInterval(check);
+        startAdCycle();
       }
+    }, 15000);
+  }
 
-      // After starting Unity load, initialize the ad asynchronously and fail-safe
-      initAd();
-    })();
+  // Function to show the ad safely
+  function showAd() {
+    if (!adContainer || !closeBtn) return;
+    adContainer.style.display = 'block';
+    adContainer.classList.remove('hidden');
+    adContainer.setAttribute('aria-hidden', 'false');
 
-    // --- Ad logic (non-blocking, with timeout) ---
-    function initAd() {
-      const AD_URL = "https://example-ad-network/example-ad.html"; // <-- Replace with your real ad src
-      const adContainer = document.getElementById('ad-container');
-      const adIframe = document.getElementById('ad-iframe');
-      const closeBtn = document.getElementById('close-ad');
+    let timeLeft = countdownStart;
+    closeBtn.textContent = `Close (${timeLeft})`;
+    closeBtn.disabled = true;
+    closeBtn.classList.remove('enabled');
 
-      // If ad src is blank or intentionally disabled, skip showing
-      if (!AD_URL) return;
-
-      // Show ad container but keep pointer-events none for the container itself so it can't block the game
-      const showDelay = 2000; // show ad after 2s
-      const loadTimeout = 8000; // if iframe hasn't loaded in 8s, hide it
-      let loadTimer = null;
-      let hideTimer = null;
-
-      function showAd() {
-        adContainer.style.display = 'block';
-        adContainer.classList.remove('hidden');
-        adContainer.setAttribute('aria-hidden', 'false');
-
-        // Set iframe src asynchronously
-        let loaded = false;
-        adIframe.onload = function() {
-          loaded = true;
-          clearTimeout(loadTimer);
-        };
-        adIframe.onerror = function() {
-          clearTimeout(loadTimer);
-          hideAd();
-        };
-
-        // start loading iframe
-        try {
-          adIframe.src = AD_URL;
-        } catch (err) {
-          console.warn("Ad iframe src set error", err);
-          hideAd();
-          return;
-        }
-
-        // If iframe doesn't load within loadTimeout, hide it (fail-safe)
-        loadTimer = setTimeout(() => {
-          if (!loaded) {
-            console.warn("Ad failed to load in time — hiding ad.");
-            hideAd();
-          }
-        }, loadTimeout);
+    const countdown = setInterval(() => {
+      timeLeft--;
+      if (timeLeft > 0) {
+        closeBtn.textContent = `Close (${timeLeft})`;
+      } else {
+        clearInterval(countdown);
+        closeBtn.disabled = false;
+        closeBtn.classList.add('enabled');
+        closeBtn.textContent = 'Close ↑';
       }
+    }, 1000);
+  }
 
-      function hideAd() {
-        try {
-          adContainer.classList.add('hidden');
-          adContainer.setAttribute('aria-hidden', 'true');
-          // remove src so it frees network and won't block
-          adIframe.src = "";
-          // fully hide after animation
-          hideTimer = setTimeout(() => adContainer.style.display = 'none', 500);
-        } catch (e) { console.warn(e); }
-      }
+  // Control cycle
+  function startAdCycle() {
+    if (adInitialized) return;
+    adInitialized = true;
+    console.log('🎯 Starting ad cycle after Unity load');
+    setTimeout(showAd, 2000); // short delay before showing first ad
+  }
 
-      closeBtn.addEventListener('click', hideAd);
+  // Close ad & schedule next one
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => {
+      if (closeBtn.disabled) return;
+      adContainer.classList.add('hidden');
+      adContainer.setAttribute('aria-hidden', 'true');
+      setTimeout(showAd, reappearDelay);
+    });
+  }
 
-      // initial show
-      setTimeout(showAd, showDelay);
-    }
-  </script>
+  // Start checking for Unity
+  waitForUnity();
+})();
+</script>
+
 </body>
 </html>
+
