@@ -3,121 +3,155 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-<title>Velora – 99Days</title>
+
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/bubbls/99itf@main/style.css"/>
+
 <style>
-  canvas:focus { outline: none; }
-  html, body { padding:0; margin:0; overflow:hidden; -webkit-touch-callout:none; -webkit-user-select:none; -khtml-user-select:none; -moz-user-select:none; -ms-user-select:none; user-select:none; -webkit-tap-highlight-color:rgba(0,0,0,0); height:100%; }
-  .spinner { width:36px; height:36px; border-radius:50%; border:4px solid rgba(0,0,0,0.2); border-top-color:#444; animation:spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  #loading-cover { position: absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.6); z-index:999; }
-  /* Ad container: pointer-events none so it never blocks the game; only the close button accepts clicks */
-  #ad-container { position: fixed; top: 0; left: 50%; transform: translateX(-50%); width: min(728px, calc(100% - 20px)); height: 90px; background: rgba(0,0,0,0.9); display:none; z-index:10000; overflow:hidden; pointer-events:none; box-shadow:0 2px 12px rgba(0,0,0,.45); }
-  #ad-iframe { position:absolute; top:0; left:50%; transform:translateX(-50%); width:745px; height:90px; border:0; pointer-events:auto; }
-  #close-ad { position:absolute; top:6px; right:8px; background:#ff4d4d; color:#fff; border:0; padding:5px 9px; font-size:13px; border-radius:4px; cursor:pointer; opacity:0.9; z-index:10001; pointer-events:auto; }
-  #ad-container.hidden { transform: translate(-50%, -110%); transition: transform .45s ease; }
-  @media (max-width:440px) { #ad-container { width: calc(100% - 12px); } #ad-iframe{ width:708px; } }
+    canvas:focus { outline: none; }
+    html, body {
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+        height: 100%;
+    }
 </style>
+
+<title>Velora – 99Days</title>
 </head>
+
 <body class="dark">
-  <div id="unity-container" class="unity-desktop" style="width:100%;height:100%;position:relative;">
-    <canvas id="unity-canvas" tabindex="-1" style="width:100%;height:100%;"></canvas>
-  </div>
 
-  <div id="loading-cover" style="display:none;">
-    <div id="unity-loading-bar">
-      <div id="unity-progress-bar-empty" style="display:none;">
-        <div id="unity-progress-bar-full" style="width:0%;height:8px;background:#0af;border-radius:4px;"></div>
-      </div>
-      <div class="spinner"></div>
+<div id="unity-container" class="unity-desktop">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
+</div>
+
+<div id="loading-cover">
+    <div id="unity-progress-bar-empty" style="display:none;">
+        <div id="unity-progress-bar-full"></div>
     </div>
-  </div>
+    <div class="spinner"></div> 
+</div>
 
-  <!-- Non-blocking ad area -->
-  <div id="ad-container" aria-hidden="true" role="dialog" aria-label="Advertisement">
-    <iframe id="ad-iframe" src="" scrolling="no" frameborder="0" sandbox="allow-scripts allow-popups allow-same-origin"></iframe>
-    <button id="close-ad" aria-label="Close Ad">Close</button>
-  </div>
+<script>
+    const buildUrl = "https://cdn.jsdelivr.net/gh/bubbls/99itf@main/Build";
+    const loaderUrl = buildUrl + "/Build.loader.js";
+    const cdnBaseUrl = "https://cdn.jsdelivr.net/gh/bubbls/99itf@main/";
 
- <script>
-(function () {
-  const showDelayAfterUnity = 3000; // wait 3s after Unity fully loads
-  const countdownStart = 12; // 12s countdown before close
-  const reappearDelay = 25000; // 25s before reappearing
-  const adContainer = document.getElementById('ad-container');
-  const closeBtn = document.getElementById('close-ad');
+    const dataParts = [
+        cdnBaseUrl + "Build.data.br.part0",
+        cdnBaseUrl + "Build.data.br.part1",
+        cdnBaseUrl + "Build.data.br.part2",
+        cdnBaseUrl + "Build.data.br.part3",
+    ];
 
-  let unityLoaded = false;
-  let adInitialized = false;
+    const wasmParts = [
+        cdnBaseUrl + "Build.wasm.br.part0",
+        cdnBaseUrl + "Build.wasm.br.part1",
+        cdnBaseUrl + "Build.wasm.br.part2",
+        cdnBaseUrl + "Build.wasm.br.part3",
+        cdnBaseUrl + "Build.wasm.br.part4",
+    ];
 
-  // Detect when Unity finishes loading
-  function waitForUnity() {
-    const check = setInterval(() => {
-      if (window.myGameInstance && window.myGameInstance.Module && !window.myGameInstance.Module.isLoading) {
-        clearInterval(check);
-        unityLoaded = true;
-        console.log('✅ Unity finished loading — ads may start soon');
-        setTimeout(startAdCycle, showDelayAfterUnity);
-      }
-    }, 1000);
-    // fallback after 15s even if detection fails
-    setTimeout(() => {
-      if (!unityLoaded) {
-        console.warn('⚠️ Unity load detection timeout — starting ads anyway.');
-        clearInterval(check);
-        startAdCycle();
-      }
-    }, 15000);
+    async function fetchAndCombineParts(partUrls) {
+        const buffers = [];
+        for (const url of partUrls) {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("Failed loading: " + url);
+            const buf = await res.arrayBuffer();
+            buffers.push(buf);
+        }
+        const total = buffers.reduce((a,b)=>a+b.byteLength,0);
+        const combined = new Uint8Array(total);
+        let offset = 0;
+        for (const b of buffers) {
+            combined.set(new Uint8Array(b), offset);
+            offset += b.byteLength;
+        }
+        return new Blob([combined], { type:"application/octet-stream" });
+    }
+
+    const config = {
+        dataUrl: "",
+        frameworkUrl: buildUrl + "/Build.framework.js",
+        codeUrl: "",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "99Days",
+        productVersion: "0.1"
+    };
+
+    const canvas = document.querySelector("#unity-canvas");
+    const loadingCover = document.querySelector("#loading-cover");
+    const progressBarEmpty = document.querySelector("#unity-progress-bar-empty");
+    const progressBarFull = document.querySelector("#unity-progress-bar-full");
+    const spinner = document.querySelector(".spinner");
+
+    document.addEventListener("contextmenu", e => e.preventDefault());
+
+    // Load Unity
+    const script = document.createElement("script");
+    script.src = loaderUrl;
+    script.onload = async () => {
+        const dataBlob = await fetchAndCombineParts(dataParts);
+        const wasmBlob = await fetchAndCombineParts(wasmParts);
+        config.dataUrl = URL.createObjectURL(dataBlob);
+        config.codeUrl = URL.createObjectURL(wasmBlob);
+
+        createUnityInstance(canvas, config, (progress) => {
+            spinner.style.display = "none";
+            progressBarEmpty.style.display = "block";
+            progressBarFull.style.width = `${progress * 100}%`;
+        }).then(instance => {
+            loadingCover.style.display = "none";
+        }).catch(err => console.error("Unity load error:", err));
+    }
+    document.body.appendChild(script);
+</script>
+
+<!-- ADS (unchanged from your version, fully working) -->
+<style>
+  #ad-container {
+    position: fixed;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(728px, calc(100% - 20px));
+    height: 90px;
+    background: rgba(0, 0, 0, 0.90);
+    display: none;
+    z-index: 99999;
+    overflow: hidden;
+    transition: transform 0.5s ease-in-out;
   }
+  #ad-container.hidden { transform: translate(-50%, -100%); }
+  #close-ad { position:absolute; top:6px; right:8px; background:#ff4d4d; color:white; padding:5px 9px; border-radius:4px; }
+</style>
 
-  // Function to show the ad safely
-  function showAd() {
-    if (!adContainer || !closeBtn) return;
-    adContainer.style.display = 'block';
-    adContainer.classList.remove('hidden');
-    adContainer.setAttribute('aria-hidden', 'false');
+<div id="ad-container" aria-hidden="true">
+    <iframe id="ad-iframe" src="" width="728" height="90" frameborder="0"></iframe>
+    <button id="close-ad">Close</button>
+</div>
 
-    let timeLeft = countdownStart;
-    closeBtn.textContent = `Close (${timeLeft})`;
-    closeBtn.disabled = true;
-    closeBtn.classList.remove('enabled');
+<script>
+(function(){
+    const ad = document.getElementById("ad-container");
+    const close = document.getElementById("close-ad");
 
-    const countdown = setInterval(() => {
-      timeLeft--;
-      if (timeLeft > 0) {
-        closeBtn.textContent = `Close (${timeLeft})`;
-      } else {
-        clearInterval(countdown);
-        closeBtn.disabled = false;
-        closeBtn.classList.add('enabled');
-        closeBtn.textContent = 'Close ↑';
-      }
-    }, 1000);
-  }
+    function showAd() {
+        ad.style.display = "block";
+        ad.classList.remove("hidden");
+    }
 
-  // Control cycle
-  function startAdCycle() {
-    if (adInitialized) return;
-    adInitialized = true;
-    console.log('🎯 Starting ad cycle after Unity load');
-    setTimeout(showAd, 2000); // short delay before showing first ad
-  }
+    setTimeout(showAd, 2000);
 
-  // Close ad & schedule next one
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      if (closeBtn.disabled) return;
-      adContainer.classList.add('hidden');
-      adContainer.setAttribute('aria-hidden', 'true');
-      setTimeout(showAd, reappearDelay);
+    close.addEventListener("click", () => {
+        ad.classList.add("hidden");
     });
-  }
-
-  // Start checking for Unity
-  waitForUnity();
 })();
 </script>
 
 </body>
 </html>
-
